@@ -96,7 +96,7 @@
       type: item.tokenType,
     })) as NFT;
 
-    token = await fetchNFTImageUrl(token);
+    token = await fetchNFTImageUrl(token, Number(item.srcChainId), Number(item.destChainId));
     loading = false;
   }
 

@@ -1,7 +1,10 @@
 import axios, { AxiosError, type AxiosResponse } from 'axios';
+import objectHash from 'object-hash';
+import { get } from 'svelte/store';
 
 import { type NFT, type NFTMetadata, TokenType } from '$libs/token';
 import { safeParseUrl } from '$libs/util/safeParseUrl';
+import { metadataCache } from '$stores/index';
 
 import { checkForAdblocker } from './checkForAdblock';
 import { extractIPFSCidFromUrl } from './extractIPFSCidFromUrl';
@@ -10,6 +13,35 @@ import { getLogger } from './logger';
 const log = getLogger('libs:token:fetchNFTMetadata');
 
 export const fetchNFTMetadata = async (token: NFT): Promise<NFTMetadata | null> => {
+  const cacheKey = objectHash.sha1(token);
+
+  // Retrieve the current value of the store
+  const cache = get(metadataCache);
+
+  if (cache.has(cacheKey)) {
+    log(`Loaded metadata from cache for ${token.name} id: ${token.tokenId}`);
+    return cache.get(cacheKey) as NFTMetadata;
+  }
+
+  try {
+    const metadata = await fetchNFTMetadataOnline(token);
+    if (!metadata) throw new Error('No metadata found');
+
+    // Update the store with the new metadata
+    metadataCache.update((currentCache) => {
+      currentCache.set(cacheKey, metadata);
+
+      return currentCache;
+    });
+
+    return metadata;
+  } catch (error) {
+    log(`Error fetching metadata for ${token.name} id: ${token.tokenId}`, error);
+    throw new Error('No metadata found');
+  }
+};
+
+const fetchNFTMetadataOnline = async (token: NFT): Promise<NFTMetadata | null> => {
   if (token.type !== TokenType.ERC721 && token.type !== TokenType.ERC1155) throw new Error('Not a NFT');
 
   log(`fetching metadata for ${token.name} id: ${token.tokenId}`);
